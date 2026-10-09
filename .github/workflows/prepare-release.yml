@@ -65,7 +65,12 @@ jobs:
             case "$VERSION_SELECTION" in
               Automatic)
                 if [[ "$current" == "$base" && "$current" != "$latest" ]]; then version=$current
-                else version="$major.$minor.$((patch + 1))"; fi ;;
+                else version="$major.$minor.$((patch + 1))"; fi
+                while git show-ref --verify --quiet "refs/tags/v$version"; do
+                  printf 'Skipping existing tag v%s\n' "$version"
+                  IFS=. read -r major minor patch <<< "$version"
+                  version="$major.$minor.$((patch + 1))"
+                done ;;
               'Use code version') version=$current ;;
               Patch) version="$major.$minor.$((patch + 1))" ;;
               Minor) version="$major.$((minor + 1)).0" ;;

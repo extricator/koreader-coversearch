@@ -59,7 +59,7 @@ The version choices work as follows:
 
 | Selection | Version used |
 | --- | --- |
-| Automatic | The code version if it is newer than every published numeric version; otherwise the next patch version. For the first release, use the code version. |
+| Automatic | Start with the code version if it is newer than every published numeric version, or the next patch otherwise. Increment the patch until the version has no existing tag. For the first release, start with the code version. |
 | Use code version | Exactly the version in `_meta.lua`; it must be newer than published releases. |
 | Patch | Increment the patch number, such as `0.1.16` → `0.1.17`. |
 | Minor | Increment the minor number and reset the patch, such as `0.1.16` → `0.2.0`. |
@@ -72,7 +72,7 @@ The workflow runs the checks, commits the version change if needed, and builds t
 
 Copilot drafts a short release description from the commits and a bounded text diff since the previous published version. It uses automatic model selection and cannot run tools. If installation or generation fails, times out, or returns empty text, the workflow uses commit-message bullets instead and continues preparing the release. The run summary shows the description and whether fallback was used. GitHub's generated changelog and links to the source commit and build log follow the description. Review a draft's notes before publishing it.
 
-An existing version tag stops the workflow; it does not refresh drafts or overwrite releases. Review an existing draft on the Releases page, or choose a new version. If a run fails after pushing its tag, you can finish that release through GitHub's release form using the existing tag. Start a new workflow run for a fresh version. Concurrent changes to `main` cause the push to fail rather than overwrite those changes.
+Automatic skips existing version tags, including tags left behind when a draft is deleted. An explicitly selected version that already has a tag stops the workflow; it does not refresh drafts or overwrite releases. Review an existing draft on the Releases page, or choose a new version. If a run fails after pushing its tag, you can finish that release through GitHub's release form using the existing tag. Start a new workflow run for a fresh version. Release notes still compare against the latest published version. Concurrent changes to `main` cause the push to fail rather than overwrite those changes.
 
 No extra repository secret or approval environment is needed: the workflow uses GitHub's token. Copilot requests require the repository owner's Copilot access and consume their plan's allowance; Free has a limited allowance. The workflow grants `copilot-requests: write` and pins the CLI version. See [GitHub's Copilot CLI Actions guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli-in-actions). It also needs permission to push the version commit to `main`; repository rules that block bot pushes would need to allow that operation. The separate [CI workflow](.github/workflows/ci.yml) checks pushes to `main` and pull requests with read-only permissions. Release preparation runs those same checks itself, because a push made using GitHub's workflow token does not trigger another push workflow. Native widget checks remain a separate step before preparing a release.
 

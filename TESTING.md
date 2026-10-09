@@ -22,6 +22,13 @@ release tags. Local verification of the release workflow used disposable
 repositories with local Git remotes and substituted GitHub CLI responses. It covered version
 selection, metadata commits, ZIP/source consistency, existing tags, concurrent
 changes, and the flags for drafts, prereleases, and immediate publication.
+Automatic selection checks also cover tags left by deleted drafts, consecutive
+occupied patch versions, first-release collisions, and unchanged existing tags
+and release-note baselines. Explicit version choices still reject collisions.
+On 2026-10-09, the corrected selection step ran in a fresh disposable checkout
+against GitHub's actual release/tag state: it skipped the abandoned `v0.1.19`,
+selected `v0.1.20`, and retained `v0.1.18` as the notes baseline. This check made
+no changes to GitHub.
 Both GitHub Actions workflows pass actionlint v1.7.12 with only its unknown
 `copilot-requests` permission diagnostic excluded; GitHub accepted that permission
 in the hosted test. The [v0.1.17 run](https://github.com/extricator/koreader-coversearch/actions/runs/37964737672)
