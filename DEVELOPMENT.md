@@ -112,6 +112,8 @@ The frame manifest controls the pause on each screen. The GIF loops at 480 × 64
 
 ## Storage and source integrations
 
+ReaderUI's customized `doc_props` omit document identifiers. The search form retrieves them from the original `doc_props` saved in the book's settings, while retaining customized title and author values.
+
 ISBN discovery validates checksums, normalizes common typographic separators, and prefers the dedicated ISBN field and explicitly marked identifiers over untyped numbers. Typed identifiers such as ASIN and UUID aren't treated as ISBNs. Calibre-style EPUB 2 identifiers use `opf:scheme="ISBN"`; EPUB 3 identifier text uses `isbn:…`. KOReader exposes both through its document identifiers. Multiple explicit ISBNs retain metadata order; identifier maps use sorted keys for deterministic selection.
 
 Discovery collects all valid ISBNs and groups equivalent 10/13-digit pairs, preserving the first representation and metadata priority. The native radio chooser appears only for distinct ISBNs, preserves the search form and checkbox state, and scrolls long lists within the screen. Each ISBN-aware source searches the selected form first. Only a successful search with no parsed cover candidates can trigger one request for its equivalent ISBN-10/ISBN-13. ISBN-13 numbers starting with `979` have no 10-digit equivalent. Errors, blocked pages, and failed image downloads don't trigger this fallback; Apple Books always uses title/author. The original query and configured result limit remain unchanged, and one final status entry is reported per source.

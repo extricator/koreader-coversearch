@@ -182,7 +182,13 @@ end
 function CoverSearch:onCoverSearch()
     if not self.ui.document then return end
     if self.session or self.searching then message(_("A cover search is already open. Close it before starting another.")); return end
-    local book = Model.metadata(self.ui.doc_props, self.ui.document.file)
+    -- ReaderUI's customized properties omit identifiers; its saved properties retain them.
+    local props = {}
+    for key, value in pairs(self.ui.doc_props or {}) do props[key] = value end
+    local original_props = self.ui.doc_settings:readSetting("doc_props", {})
+    props.identifiers = props.identifiers or original_props.identifiers
+    props.isbn = props.isbn or original_props.isbn
+    local book = Model.metadata(props, self.ui.document.file)
     local book_file = self.ui.document.file
     local dialog, isbn_checkbox
     local selected_isbn = book.isbn

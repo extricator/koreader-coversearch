@@ -105,6 +105,20 @@ local function searchForm(props, disable_isbn)
 end
 local checkbox = searchForm({ title = "Dune", authors = "Frank Herbert", identifiers = "urn:isbn:9780441172719" })
 assert(checkbox.checked and submitted.isbn == "9780441172719")
+-- ReaderUI saves raw properties, then uses BookInfo's customized copy without identifiers.
+local BookInfo = require("apps/filemanager/filemanagerbookinfo")
+local original_props = { title = "Original title", authors = "Original author",
+    identifiers = "MOBI-ASIN:B072P65L3N\nISBN:9780876127773\nuuid:ec325383-fd1d-4c89-a804-dfdca76b3c16" }
+local customized_props = BookInfo.extendProps(original_props)
+assert(customized_props.identifiers == nil)
+customized_props.title, customized_props.authors = "Edited title", "Edited author"
+ui.doc_settings:saveSetting("doc_props", original_props)
+checkbox = searchForm(customized_props)
+assert(checkbox.checked and submitted.isbn == "9780876127773")
+assert(submitted.title == "Edited title" and submitted.author == "Edited author")
+assert(customized_props.identifiers == nil, "Discovery must not mutate ReaderUI's properties")
+ui.doc_settings:delSetting("doc_props")
+print("PASS ISBN discovery through ReaderUI's customized metadata while preserving title/author")
 checkbox = searchForm({ title = "Dune", authors = "Frank Herbert", isbn = "0441172717" }, true)
 assert(not checkbox.checked and submitted.isbn == "" and submitted.title == "Dune")
 checkbox = searchForm({ title = "Dune", authors = "Frank Herbert" }, true)
