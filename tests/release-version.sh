@@ -37,6 +37,8 @@ fixture() {
     cp -R tools coversearch.koplugin "$scratch/$1/"
     cp LICENSE .gitignore "$scratch/$1/"
     cd "$scratch/$1"
+    # Fix the test baseline independently of the plugin's evolving version.
+    luajit tools/select-version.lua write coversearch.koplugin/_meta.lua 0.1.16
     git init -q -b main
     git config user.name 'Release test'
     git config user.email 'test@example.invalid'

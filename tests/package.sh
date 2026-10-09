@@ -22,7 +22,9 @@ while IFS= read -r source_file; do
     cmp "$source_file" "$scratch/extracted/$source_file"
 done < <(git ls-files -- coversearch.koplugin)
 cmp LICENSE "$scratch/extracted/coversearch.koplugin/LICENSE"
-for bad_tag in v999.999.999 v01.1.16 0.1.16 'v0.1.16;echo unexpected'; do
+mismatched_tag=v0.0.0
+[[ "$version" != 0.0.0 ]] || mismatched_tag=v0.0.1
+for bad_tag in "$mismatched_tag" v01.1.16 0.1.16 'v0.1.16;echo unexpected'; do
     if bash tools/package.sh "$bad_tag" "$scratch/rejected" > "$scratch/rejected.log" 2>&1; then
         printf 'Accepted an invalid tag: %s\n' "$bad_tag" >&2
         exit 1
