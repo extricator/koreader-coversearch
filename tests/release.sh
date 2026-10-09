@@ -15,7 +15,7 @@ case "$1 $2" in
         echo READ_RELEASE >> "$MOCK_LOG"
         case "$MOCK_SCENARIO" in
             auth) echo 'gh: Bad credentials (HTTP 401)' >&2; exit 1 ;;
-            draft|draft_conflict|draft_without_tag) echo true ;;
+            draft|draft_conflict|draft_without_tag|upload_error) echo true ;;
             published) echo false ;;
             *) missing ;;
         esac ;;
@@ -26,21 +26,22 @@ case "$1 $2" in
             conflict|draft_conflict) echo 'commit 0000000000000000000000000000000000000000' ;;
             annotated) echo 'tag 1111111111111111111111111111111111111111' ;;
             tag_error) echo 'gh: Service Unavailable (HTTP 503)' >&2; exit 1 ;;
-            *) echo "commit $GITHUB_SHA" ;;
+            *) echo "commit $RELEASE_SHA" ;;
         esac ;;
     'api repos/{owner}/{repo}/git/tags/'*)
         echo READ_ANNOTATED_TAG >> "$MOCK_LOG"
-        echo "commit $GITHUB_SHA" ;;
+        echo "commit $RELEASE_SHA" ;;
     'api repos/{owner}/{repo}/git/refs')
-        [[ " $* " == *" ref=refs/tags/$MOCK_TAG "* && " $* " == *" sha=$GITHUB_SHA "* ]]
+        [[ " $* " == *" ref=refs/tags/$MOCK_TAG "* && " $* " == *" sha=$RELEASE_SHA "* ]]
         echo CREATE_TAG >> "$MOCK_LOG" ;;
     'release create')
         [[ "$3" == "$MOCK_TAG" ]]
         [[ " $* " == *' --draft '* && " $* " == *' --generate-notes '* && " $* " == *' --verify-tag '* ]]
+        [[ " $* " == *" --title $MOCK_TAG "* && " $* " == *" --prerelease=$PRERELEASE "* ]]
         [[ "$4" == "dist/koreader-coversearch-$MOCK_TAG.zip" && "$5" == "$4.sha256" ]]
         while (($#)); do
             if [[ "$1" == --notes-file ]]; then
-                grep -Fq "$GITHUB_SHA" "$2"
+                grep -Fq "$RELEASE_SHA" "$2"
                 grep -Fq 'Build log' "$2"
                 break
             fi
@@ -49,9 +50,24 @@ case "$1 $2" in
         (($#))
         echo CREATE_DRAFT_WITH_GENERATED_NOTES >> "$MOCK_LOG" ;;
     'release upload')
+        [[ "$MOCK_SCENARIO" != upload_error ]] || { echo 'Upload failed (HTTP 503)' >&2; exit 1; }
         [[ "$MOCK_SCENARIO" == draft && " $* " == *' --clobber '* ]]
         [[ "$4" == "dist/koreader-coversearch-$MOCK_TAG.zip" && "$5" == "$4.sha256" ]]
         echo REFRESH_ASSETS >> "$MOCK_LOG" ;;
+    'release edit')
+        [[ "$3" == "$MOCK_TAG" ]]
+        if [[ " $* " == *' --draft=false '* ]]; then
+            [[ "$RELEASE_RESULT" == publish ]]
+            expected_latest=true
+            [[ "$PRERELEASE" == false ]] || expected_latest=false
+            [[ " $* " == *" --latest=$expected_latest "* ]]
+            echo PUBLISH_RELEASE >> "$MOCK_LOG"
+        else
+            [[ "$MOCK_SCENARIO" == draft && " $* " == *' --draft=true '* ]]
+            [[ " $* " == *" --title $MOCK_TAG "* && " $* " == *" --prerelease=$PRERELEASE "* ]]
+            [[ " $* " != *' --notes '* && " $* " != *' --notes-file '* ]]
+            echo UPDATE_DRAFT_METADATA >> "$MOCK_LOG"
+        fi ;;
     'release view')
         echo "https://github.com/$GH_REPO/releases/tag/$MOCK_TAG" ;;
     *) echo "Unexpected GitHub command: $*" >&2; exit 1 ;;
@@ -62,6 +78,7 @@ export PATH="$scratch/bin:$PATH"
 export GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF=refs/heads/main
 export GITHUB_SHA GH_REPO=example/coversearch GITHUB_SERVER_URL=https://github.com GITHUB_RUN_ID=123
 GITHUB_SHA=$(git rev-parse HEAD)
+export RELEASE_SHA="$GITHUB_SHA" PRERELEASE=false RELEASE_RESULT=draft
 export MOCK_TAG="v$(luajit tools/version.lua)" MOCK_LOG="$scratch/operations"
 export GITHUB_STEP_SUMMARY="$scratch/summary"
 bash tools/package.sh "$MOCK_TAG" > "$scratch/build.log"
@@ -71,10 +88,17 @@ check() {
     : > "$MOCK_LOG"; : > "$GITHUB_STEP_SUMMARY"
     if bash tools/prepare-release.sh "$MOCK_TAG" > "$scratch/output" 2>&1; then
         [[ "$expected" == pass ]] || { cat "$scratch/output"; exit 1; }
-        grep -Fq 'Review draft release' "$GITHUB_STEP_SUMMARY"
+        if [[ "$RELEASE_RESULT" == draft || "$RELEASE_RESULT" == 'Draft release' ]]; then
+            grep -Fq 'Review draft release' "$GITHUB_STEP_SUMMARY"
+            ! grep -Fxq PUBLISH_RELEASE "$MOCK_LOG"
+        else
+            grep -Fq 'Published release' "$GITHUB_STEP_SUMMARY"
+            grep -Fxq PUBLISH_RELEASE "$MOCK_LOG"
+            [[ $(tail -n 1 "$MOCK_LOG") == PUBLISH_RELEASE ]]
+        fi
     else
         [[ "$expected" == fail ]] || { cat "$scratch/output"; exit 1; }
-        if grep -Eq 'CREATE_TAG|CREATE_DRAFT|REFRESH_ASSETS' "$MOCK_LOG"; then
+        if grep -Eq 'CREATE_TAG|CREATE_DRAFT|REFRESH_ASSETS|UPDATE_DRAFT|PUBLISH_RELEASE' "$MOCK_LOG"; then
             echo "Failed scenario performed a remote mutation: $scenario" >&2; exit 1
         fi
     fi
@@ -85,11 +109,26 @@ grep -Fxq CREATE_TAG "$MOCK_LOG"
 grep -Fxq CREATE_DRAFT_WITH_GENERATED_NOTES "$MOCK_LOG"
 check draft pass
 grep -Fxq REFRESH_ASSETS "$MOCK_LOG"
+grep -Fxq UPDATE_DRAFT_METADATA "$MOCK_LOG"
 ! grep -Eq 'CREATE_TAG|CREATE_DRAFT' "$MOCK_LOG"
 check existing_tag pass
 ! grep -Fxq CREATE_TAG "$MOCK_LOG"
 check annotated pass
 grep -Fxq READ_ANNOTATED_TAG "$MOCK_LOG"
+PRERELEASE=true
+check new pass
+RELEASE_RESULT=publish
+check new pass
+check draft pass
+PRERELEASE=false
+check new pass
+check draft pass
+check upload_error fail
+RELEASE_RESULT='Publish immediately'
+check new pass
+RELEASE_RESULT='Draft release'
+check draft pass
+RELEASE_RESULT=draft
 for scenario in published conflict draft_conflict draft_without_tag auth tag_error; do
     check "$scenario" fail
 done
@@ -97,7 +136,15 @@ GITHUB_REF=refs/heads/feature
 check wrong_branch fail
 [[ ! -s "$MOCK_LOG" ]]
 GITHUB_REF=refs/heads/main
-GITHUB_SHA=0000000000000000000000000000000000000000
+RELEASE_SHA=0000000000000000000000000000000000000000
 check wrong_checkout fail
 [[ ! -s "$MOCK_LOG" ]]
-printf '%s\n' 'All draft-release checks passed without network access'
+RELEASE_SHA=$GITHUB_SHA
+PRERELEASE=invalid
+check invalid_prerelease fail
+PRERELEASE=false RELEASE_RESULT=invalid
+check invalid_result fail
+RELEASE_RESULT=draft
+GITHUB_SHA=1111111111111111111111111111111111111111
+check generated_source pass
+printf '%s\n' 'All release creation/publication checks passed without network access'

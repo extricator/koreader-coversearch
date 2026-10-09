@@ -48,7 +48,7 @@ If your chosen cover doesn't appear while the device is asleep, check that KORea
 
 ## Contributing
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for tests, translations, releases, and recording the demo. [TESTING.md](TESTING.md) contains verification results and the device test checklist. GitHub Actions builds the release ZIPs and prepares drafts for review before publication; each release links to its source commit and build log and includes a SHA-256 checksum.
+See [DEVELOPMENT.md](DEVELOPMENT.md) for tests, translations, releases, and recording the demo. [TESTING.md](TESTING.md) contains verification results and the device test checklist. GitHub Actions handles version updates and builds the release ZIPs, with drafts for review by default and optional immediate publication. Each release links to its source commit and build log and includes a SHA-256 checksum.
 
 ## License
 

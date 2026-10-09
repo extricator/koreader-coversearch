@@ -9,10 +9,11 @@ Run the dependency-free checks and Lua syntax validation from the project root:
 ```sh
 bash tools/check.sh
 bash tests/package.sh
+bash tests/release-version.sh
 bash tests/release.sh
 ```
 
-The Lua suites in `tests/run.lua`, `isbn.lua`, `http.lua`, `cache.lua`, and `localization.lua` can also run individually with LuaJIT. They cover provider parsing, metadata and ISBN handling, encoded image dimensions, response limits, redirects, timeout restoration, source failures, cover-store rollback, cache retention, and translation coverage. ISBN checks use the real provider parsers with deterministic responses to verify equivalent-number request counts, error isolation, result limits, and Apple's title/author exception. The packaging check verifies exact archive contents, extracted file bytes, SHA-256, repeatable builds, and rejection of mismatched tags. Draft-release checks use a fake GitHub CLI to test tag creation, draft retries, annotated tags, and refusal of conflicting tags, published releases, or failed API requests without network access or remote writes.
+The Lua suites in `tests/run.lua`, `isbn.lua`, `http.lua`, `cache.lua`, and `localization.lua` can also run individually with LuaJIT. They cover provider parsing, metadata and ISBN handling, encoded image dimensions, response limits, redirects, timeout restoration, source failures, cover-store rollback, cache retention, and translation coverage. ISBN checks use the real provider parsers with deterministic responses to verify equivalent-number request counts, error isolation, result limits, and Apple's title/author exception. The packaging check verifies exact archive contents, extracted file bytes, SHA-256, repeatable builds, and rejection of mismatched tags. Release checks use temporary Git repositories and a fake GitHub CLI to exercise version selection, metadata commits, retries, concurrent edits, tag creation, drafts, prereleases, and publication without network access or writes to GitHub.
 
 Native integration checks use a separately unpacked KOReader Linux distribution. From its `lib/koreader` directory, supply absolute paths to this project and a valid cover JPEG/PNG at least 100 × 100 pixels:
 
@@ -41,20 +42,35 @@ The live check fails if fewer than five sources return an image. Keep dated prov
 
 ## Releases
 
-The [Prepare release workflow](.github/workflows/prepare-release.yml) is started manually from GitHub's Actions tab. It checks out the exact commit selected when the run begins, validates the requested version against `coversearch.koplugin/_meta.lua`, runs the checks, and builds the ZIP and SHA-256 checksum. It creates a `vX.Y.Z` tag pointing to that commit and uploads the assets to a draft release. The workflow stops there; publication is a separate action on the Releases page. Pushing a tag does not prepare or publish a release.
+Start the [Prepare release workflow](.github/workflows/prepare-release.yml) from GitHub's Actions tab whenever you want a release. Choose the version there; the workflow updates `coversearch.koplugin/_meta.lua` and commits the change when needed. You do not need to edit the version locally or push a tag. Release titles and tags are simply `vX.Y.Z`, and the downloadable archive is `koreader-coversearch-vX.Y.Z.zip`.
 
 To prepare a release:
 
-1. Update the plugin version and any relevant documentation, run the checks, and commit and push the changes to `main`.
-2. Open **Actions → Prepare release → Run workflow**. Select `main` and enter the version without a `v` prefix, such as `0.1.16`. It must match the committed plugin metadata. The workflow file must be present on the repository's default branch for the manual control to appear.
-3. Wait for the workflow to finish, then follow **Review draft release** in its summary.
-4. Check the notes and assets, edit the notes as needed, and click **Publish release** when ready.
+1. Commit and push the changes you want to release to `main`.
+2. Open **Actions → Prepare release → Run workflow**, with `main` selected. Leave **Version selection** on **Automatic**, choose a bump, or enter **Custom version**. A custom number overrides the selector.
+3. Leave **Result** on **Draft release** to review before publication, or choose **Publish immediately** to publish when the build succeeds. Check **Prerelease** only for a testing release.
+4. Follow the release link in the completed run's summary. For a draft, review the notes and assets, then click **Publish release** when ready.
+
+The version choices work as follows:
+
+| Selection | Version used |
+| --- | --- |
+| Automatic | The code version if it is newer than every published numeric version; otherwise the next patch version. For the first release, use the code version. |
+| Use code version | Exactly the version in `_meta.lua`; it must be newer than published releases. |
+| Patch | Increment the patch number, such as `0.1.16` → `0.1.17`. |
+| Minor | Increment the minor number and reset the patch, such as `0.1.16` → `0.2.0`. |
+| Major | Increment the major number and reset minor/patch, such as `0.1.16` → `1.0.0`. |
+| Custom version | Your exact `X.Y.Z` number, without `v`, leading zeros, or a suffix. |
+
+Bumps start from the greater of the code version and the highest published numeric version. Published prereleases also reserve their number. A custom version must be newer than published versions, but the first release can use any valid number. GitHub's prerelease flag labels the release and excludes it from the normal latest release; it does not add `-beta` to the version or filenames. GitHub's native workflow form cannot calculate a suggested number before running, so the resolved version appears in the run summary instead.
+
+The workflow runs the tests and builds the ZIP and SHA-256 checksum before pushing a version commit. It then attests the build, creates the tag at the exact release commit, and attaches the assets to a draft. With **Publish immediately** selected, it publishes that draft after the assets have been attached. An ordinary published release becomes latest; a prerelease does not. Pushing a tag alone never prepares or publishes a release.
 
 The draft includes GitHub's automatically generated notes, installation instructions, and links to the source commit and build log. Generated notes list merged pull requests and contributors and link to the full changelog; versions developed mostly through direct commits may need a hand-written summary. Review and edit the draft rather than treating generated notes as a complete description of the release.
 
-Rerunning preparation for the same commit refreshes an existing draft's assets while preserving its note edits. A tag that points to another commit, or an already published release, stops preparation. If you change the source after preparing a draft, use a new version or explicitly resolve the old draft and tag; the workflow never moves a version tag. Uploading the assets before manual publication also supports GitHub's immutable releases setting.
+Rerunning the same workflow run reuses its version commit if it has already been pushed. An existing draft for the same release commit can have its assets refreshed while preserving your note edits. Starting a new run with **Automatic** or **Use code version** also finds that draft if the code and version are unchanged. A tag at another commit or an already published target stops preparation; tags never move. If you change the source after preparing a draft, choose a bump or a new custom version. If `main` changes during preparation, the workflow stops instead of overwriting those edits. Attaching assets before publication also supports GitHub's immutable releases setting.
 
-No extra repository secret or approval environment is needed: the workflow uses GitHub's token. The separate [CI workflow](.github/workflows/ci.yml) checks pushes to `main` and pull requests with read-only permissions. CI validates Lua, packaging, and simulated draft preparation without downloading KOReader; the native widget checks above remain a separate step before preparing a release.
+No extra repository secret or approval environment is needed: the workflow uses GitHub's token. It needs permission to push the version commit to `main`; repository rules that block bot pushes would need to allow that operation. The separate [CI workflow](.github/workflows/ci.yml) checks pushes to `main` and pull requests with read-only permissions. Release preparation runs those same checks itself, because a push made using GitHub's workflow token does not trigger another push workflow. Native widget checks remain a separate step before preparing a release.
 
 For a local installation ZIP, run:
 
@@ -64,7 +80,7 @@ bash tools/package.sh
 
 This writes `dist/koreader-coversearch-vX.Y.Z.zip` and its `.sha256` file. Only tracked runtime files and a copy of `LICENSE` are packaged under `coversearch.koplugin/`. The script uses sorted file paths, fixed permissions, the source commit's timestamp, and no ZIP extra fields. Rebuilding the same clean checkout with the same Info-ZIP version produces identical bytes. Build output is ignored by Git; downloadable archives belong on Releases rather than in the source tree.
 
-For a public repository, the workflow also creates a GitHub build provenance attestation linking the ZIP to its source and workflow. After downloading both release assets, verify their checksum from the download directory; you can additionally verify provenance using the GitHub CLI, substituting this repository's owner/name:
+For a public repository, the workflow also creates a signed SLSA v1 build provenance attestation linking the ZIP to its release commit and workflow. The checked-in provenance script records the final release commit separately from the initial workflow commit, since an automatic metadata update can make them different. After downloading both release assets, verify their checksum from the download directory; you can additionally verify provenance using the GitHub CLI, substituting this repository's owner/name:
 
 ```sh
 sha256sum --check koreader-coversearch-v0.1.16.zip.sha256
