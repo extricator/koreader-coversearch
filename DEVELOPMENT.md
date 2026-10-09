@@ -34,7 +34,7 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ./luajit /path/to/project/tests/menu
 
 Run native checks sequentially in a disposable runtime. They use temporary books and screenshots under `/tmp`, plus the runtime's settings and cache folders. The fourth argument selects the UI language. `tests/cache-runtime.lua` accepts a fifth argument (`message`, `outside`, or `thumbnail`) to choose a cancellation tap location; by default, it taps over the browser's Next button.
 
-The native checks exercise real widgets, touch/key dispatch, decoding, pagination, previews, cover storage and reset, metadata events, ebook preservation, modal loading, and subprocess cancellation, including cancellation during an equivalent-ISBN request. Handcrafted EPUB 2/3 fixtures verify that KOReader exposes calibre-style identifiers to the plugin. The menu checks use a populated reader menu to verify the plugin's placement beside Book information on the first page. Network responses are substituted for these UI checks.
+The native checks exercise real widgets, touch/key dispatch, decoding, pagination, previews, cover storage and reset, metadata events, ebook preservation, modal loading, and subprocess cancellation, including cancellation during an equivalent-ISBN request. Handcrafted EPUB 2/3 fixtures verify that KOReader exposes calibre-style identifiers to the plugin. The menu checks use populated reader menus to verify Cover search immediately below Document settings on the page-icon tab's first page, and compare the hamburger menu and Exit pagination with the plugin absent. Network responses are substituted for these UI checks.
 
 For optional live source verification:
 

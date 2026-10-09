@@ -80,17 +80,20 @@ local function showMenu(open_submenu)
     local labels = { history = "History", open_previous_document = "Open previous document",
         favorites = "Favorites", collections = "Collections", bookmark_browser = "Bookmark browser",
         book_status = "Book status", mass_storage_actions = "USB storage",
-        ota_update = "Update KOReader", help = "Help", exit_menu = "Exit" }
+        ota_update = "Update KOReader", help = "Help", exit_menu = "Exit",
+        document_settings = "Document settings", set_render_style = "Render style",
+        style_tweaks = "Style tweaks", change_font = "Font", typography = "Typography",
+        speed_reading_module_perception_expander = "Speed reading", highlight_options = "Highlights" }
     for id, label in pairs(labels) do items[id] = { text = label, callback = function() end } end
     require("apps/filemanager/filemanagerbookinfo"):new{ ui = plugin.ui }:addToMainMenu(items)
     plugin:addToMainMenu(items)
     local entry = items.coversearch
     reader_menu.tab_item_table = require("ui/menusorter"):sort(items, require("ui/elements/reader_menu_order"))
-    local main_index
+    local typeset_index
     for index, tab in ipairs(reader_menu.tab_item_table) do
-        if tab.id == "main" then main_index = index end
+        if tab.id == "typeset" then typeset_index = index end
     end
-    reader_menu:onShowMenu(main_index)
+    reader_menu:onShowMenu(typeset_index)
     local menu = reader_menu.menu_container[1]
     if open_submenu ~= false then menu:onMenuSelect(entry) end
     return menu, entry

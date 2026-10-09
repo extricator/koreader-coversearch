@@ -14,7 +14,7 @@ The plugin targets KOReader **v2026.07.1** and needs an internet connection to s
 
 1. Download `koreader-coversearch-vX.Y.Z.zip` from the [latest release](../../releases/latest) and extract it into KOReader's `plugins` directory. The resulting path should be `koreader/plugins/coversearch.koplugin/main.lua`.
 2. Restart KOReader, then open a book.
-3. Open the top menu's **hamburger (☰) tab**. You'll find **Cover search** immediately below **Book information**.
+3. Open the top menu's **page-icon tab** (fonts and layout). You'll find **Cover search** immediately below **Document settings**.
 
 If the entry doesn't appear, check that **Cover search** is enabled in KOReader's plugin management menu and restart again. You can also install directly from this repository by copying the `coversearch.koplugin` folder into `koreader/plugins`.
 

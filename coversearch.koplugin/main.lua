@@ -108,15 +108,15 @@ end
 
 function CoverSearch:addToMainMenu(items)
     -- sorting_hint chooses a tab but appends after its built-in entries.
-    -- Use the cached menu order to keep cover actions with the book information.
-    local order = require("ui/elements/reader_menu_order").main
+    -- Use the cached menu order to keep cover actions beside Document settings.
+    local order = require("ui/elements/reader_menu_order").typeset
     local placed = false
     for _, id in ipairs(order or {}) do
         if id == "coversearch" then placed = true; break end
     end
     if not placed then
         for index, id in ipairs(order or {}) do
-            if id == "book_info" then table.insert(order, index + 1, "coversearch"); break end
+            if id == "document_settings" then table.insert(order, index + 1, "coversearch"); break end
         end
     end
     local sources = {}
@@ -140,7 +140,7 @@ function CoverSearch:addToMainMenu(items)
         }
     end
     items.coversearch = {
-        text = _("Cover search"), sorting_hint = "main",
+        text = _("Cover search"), sorting_hint = "typeset",
         sub_item_table = {
             { text = _("Search covers for this book"), callback = function() self:onCoverSearch() end },
             { text = _("Restore original cover"), enabled_func = function() return DocSettings:findCustomCoverFile(self.ui.document.file) ~= nil end,

@@ -56,11 +56,13 @@ responses are substituted to make UI and storage checks deterministic.
   state transfer, partial files, cleanup, and cancellation followed by retry.
   Checks passed in portrait, landscape, and key-only modes, including Spanish
   landscape and key input.
-- `tests/menu-runtime.lua` checks the populated reader menu: Cover search appears
-  immediately after Book information in the same group on page one. It also
-  checks duplicate registration, existing ordering, missing-anchor fallback,
-  and opening the search form. English/Spanish portrait and landscape checks
-  passed.
+- `tests/menu-runtime.lua` checks populated reader menus: Cover search appears
+  immediately after Document settings in the same group on the page-icon tab's
+  first page. It compares the hamburger menu and Exit pagination with the plugin
+  absent, and checks duplicate registration, existing ordering, missing-anchor
+  fallback, and opening the search form. English/Spanish portrait and landscape
+  checks passed on 2026-10-09; the portrait fixture keeps Exit on page one at
+  the menu's ten-entry boundary.
 
 Modal cancellation checks dispatch actual taps or key events. A tap on the
 loading message, outside it, or over an underlying thumbnail/Next button cancels
@@ -96,7 +98,8 @@ to user feedback. The complete checklist below still needs hardware verification
 especially Wi-Fi handling, e-ink refresh, and device screen/font settings.
 
 1. Install the plugin, restart KOReader, and open an ebook. Find Cover search
-   directly below Book information in the top menu's hamburger tab.
+   directly below Document settings in the top menu's page-icon tab. Verify the
+   hamburger menu's Exit entry remains on its usual page.
 2. Verify the title and author remain editable. Check that a discovered ISBN is
    prefilled beneath the unchecked Use ISBN control, with the field grayed out.
    Enable it, edit or paste an ISBN, then disable and enable it again; the value
