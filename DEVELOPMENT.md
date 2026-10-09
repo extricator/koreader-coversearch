@@ -13,6 +13,12 @@ bash tests/package.sh
 
 The Lua suites in `tests/run.lua`, `isbn.lua`, `http.lua`, `cache.lua`, and `localization.lua` can also run individually with LuaJIT. They cover provider parsing, metadata and ISBN handling, encoded image dimensions, response limits, redirects, timeout restoration, source failures, cover-store rollback, cache retention, and translation coverage. ISBN checks use the real provider parsers with deterministic responses to verify equivalent-number request counts, error isolation, result limits, and Apple's title/author exception. The packaging check verifies exact archive contents, extracted file bytes, SHA-256, repeatable builds, and rejection of mismatched tags. For workflow changes, use actionlint and exercise the affected steps in a disposable checkout.
 
+Actionlint v1.7.12 does not recognize GitHub's newer `copilot-requests` permission. Until the linter supports it, ignore only that specific diagnostic; GitHub accepts the permission:
+
+```sh
+actionlint -ignore '^unknown permission scope "copilot-requests"\.'
+```
+
 Native integration checks use a separately unpacked KOReader Linux distribution. From its `lib/koreader` directory, supply absolute paths to this project and a valid cover JPEG/PNG at least 100 × 100 pixels:
 
 ```sh
@@ -64,11 +70,11 @@ Bumps start from the greater of the code version and the highest published numer
 
 The workflow runs the checks, commits the version change if needed, and builds the ZIP and SHA-256 checksum. It pushes the release commit and tag together, then uses GitHub's CLI to create the release with your chosen settings. An ordinary published release becomes latest; a prerelease does not. Pushing a tag alone never prepares or publishes a release.
 
-The release includes GitHub's automatically generated notes and links to the source commit and build log. Generated notes list merged pull requests and contributors and link to the full changelog; versions developed mostly through direct commits may need a hand-written summary. Review and edit a draft's notes before publishing it.
+Copilot drafts a short release description from the commits and a bounded text diff since the previous published version. It uses automatic model selection and cannot run tools. If installation or generation fails, times out, or returns empty text, the workflow uses commit-message bullets instead and continues preparing the release. The run summary shows the description and whether fallback was used. GitHub's generated changelog and links to the source commit and build log follow the description. Review a draft's notes before publishing it.
 
 An existing version tag stops the workflow; it does not refresh drafts or overwrite releases. Review an existing draft on the Releases page, or choose a new version. If a run fails after pushing its tag, you can finish that release through GitHub's release form using the existing tag. Start a new workflow run for a fresh version. Concurrent changes to `main` cause the push to fail rather than overwrite those changes.
 
-No extra repository secret or approval environment is needed: the workflow uses GitHub's token. It needs permission to push the version commit to `main`; repository rules that block bot pushes would need to allow that operation. The separate [CI workflow](.github/workflows/ci.yml) checks pushes to `main` and pull requests with read-only permissions. Release preparation runs those same checks itself, because a push made using GitHub's workflow token does not trigger another push workflow. Native widget checks remain a separate step before preparing a release.
+No extra repository secret or approval environment is needed: the workflow uses GitHub's token. Copilot requests require the repository owner's Copilot access and consume their plan's allowance; Free has a limited allowance. The workflow grants `copilot-requests: write` and pins the CLI version. See [GitHub's Copilot CLI Actions guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli-in-actions). It also needs permission to push the version commit to `main`; repository rules that block bot pushes would need to allow that operation. The separate [CI workflow](.github/workflows/ci.yml) checks pushes to `main` and pull requests with read-only permissions. Release preparation runs those same checks itself, because a push made using GitHub's workflow token does not trigger another push workflow. Native widget checks remain a separate step before preparing a release.
 
 For a local installation ZIP, run:
 

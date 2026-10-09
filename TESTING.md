@@ -22,8 +22,19 @@ release tags. Local verification of the release workflow used disposable
 repositories with local Git remotes and substituted GitHub CLI responses. It covered version
 selection, metadata commits, ZIP/source consistency, existing tags, concurrent
 changes, and the flags for drafts, prereleases, and immediate publication.
-Both GitHub Actions workflows pass actionlint v1.7.12. GitHub-hosted draft
-preparation and publication have not yet been exercised.
+Both GitHub Actions workflows pass actionlint v1.7.12 with only its unknown
+`copilot-requests` permission diagnostic excluded; GitHub accepted that permission
+in the hosted test. The [v0.1.17 run](https://github.com/extricator/koreader-coversearch/actions/runs/37964737672)
+verified publication, including its ZIP and checksum assets.
+
+On 2026-10-09, a [notes-only Actions run](https://github.com/extricator/koreader-coversearch/actions/runs/37973622920)
+verified Copilot generation with the built-in workflow token and no available
+tools. It ran on a temporary branch with read-only repository access and created
+no release. Local checks exercised generated notes, authentication errors,
+partial failed responses, empty output, timeouts, installation failures, the
+first release, and no new commits. They also verified bounded input, excluded
+media, omission of version-bump commits, and preservation of the description
+when build/source links are appended. Draft creation remains untested on GitHub.
 
 ## Native KOReader checks
 
