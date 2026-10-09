@@ -1,0 +1,71 @@
+name: Prepare release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (X.Y.Z, must match plugin metadata)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      EXPECTED_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Check out the selected commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Require the main branch
+        run: |
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo 'Run Prepare release on the main branch.' >&2
+            exit 1
+          fi
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y luajit zip unzip
+      - name: Validate release version
+        run: |
+          version=$(luajit tools/version.lua "v$EXPECTED_VERSION")
+          printf 'RELEASE_TAG=v%s\n' "$version" >> "$GITHUB_ENV"
+      - name: Check Lua and run tests
+        run: bash tools/check.sh
+      - name: Verify release packaging
+        run: bash tests/package.sh
+      - name: Verify draft preparation
+        run: bash tests/release.sh
+      - name: Build release ZIP and checksum
+        run: |
+          bash tools/package.sh "$RELEASE_TAG"
+          {
+            printf 'Source commit: `%s`\n\n' "$GITHUB_SHA"
+            printf 'SHA-256:\n```\n'
+            cat dist/*.sha256
+            printf '```\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Attest the public build
+        if: github.event.repository.private == false
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: dist/*.zip
+          create-storage-record: false
+      - name: Create or refresh a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash tools/prepare-release.sh "$RELEASE_TAG"
