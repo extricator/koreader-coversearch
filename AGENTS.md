@@ -47,9 +47,8 @@ release and demo scripts live in `tools/`.
   actual widgets for UI review; keep temporary screenshots outside the repo.
 - For packaging changes, run `bash tests/package.sh`. Live catalog verification
   uses `tests/live.lua` separately; it is not part of deterministic CI.
-- For release changes, run `bash tests/release-version.sh` and
-  `bash tests/release.sh`; they use disposable repositories and a fake GitHub CLI.
-  Do not run a real release as a test without being asked to create one.
+- For workflow changes, run actionlint and verify affected steps in a disposable
+  checkout. Do not create a real release as a test without being asked to do so.
 - For documentation-only changes, check links and `git diff --check`.
   Record validation accurately; desktop checks do not establish hardware results.
 

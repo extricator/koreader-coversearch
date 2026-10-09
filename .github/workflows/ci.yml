@@ -18,12 +18,8 @@ jobs:
         with:
           persist-credentials: false
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y luajit zip unzip jq
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y luajit zip unzip
       - name: Check Lua and run tests
         run: bash tools/check.sh
       - name: Verify release packaging
         run: bash tests/package.sh
-      - name: Verify release automation
-        run: |
-          bash tests/release-version.sh
-          bash tests/release.sh

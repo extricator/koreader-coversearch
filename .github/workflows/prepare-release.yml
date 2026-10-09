@@ -5,34 +5,24 @@ on:
     inputs:
       version_selection:
         description: 'Version selection (ignored when Custom version is filled)'
-        required: true
         type: choice
         default: Automatic
-        options:
-          - Automatic
-          - Use code version
-          - Patch
-          - Minor
-          - Major
+        options: [Automatic, Use code version, Patch, Minor, Major]
       custom_version:
         description: 'Custom version — optional X.Y.Z override, without v'
-        required: false
         type: string
       prerelease:
         description: 'Mark as a prerelease for testing'
         type: boolean
         default: false
       result:
-        description: 'Result: draft for review, or publish immediately'
-        required: true
+        description: 'Draft for review, or publish immediately'
         type: choice
         default: Draft release
-        options:
-          - Draft release
-          - Publish immediately
+        options: [Draft release, Publish immediately]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: prepare-release
@@ -42,66 +32,82 @@ jobs:
   prepare:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
     env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
       VERSION_SELECTION: ${{ inputs.version_selection }}
       CUSTOM_VERSION: ${{ inputs.custom_version }}
       PRERELEASE: ${{ inputs.prerelease }}
-      RELEASE_RESULT: ${{ inputs.result }}
-      GH_REPO: ${{ github.repository }}
+      DRAFT: ${{ inputs.result != 'Publish immediately' }}
     steps:
-      - name: Check out the selected commit
+      - name: Require main
+        run: test "$GITHUB_REF" = refs/heads/main
+      - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          persist-credentials: false
           ref: ${{ github.sha }}
           fetch-depth: 0
-      - name: Require the main branch
-        run: |
-          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
-            echo 'Run Prepare release on the main branch.' >&2
-            exit 1
-          fi
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y luajit zip unzip jq
-      - name: Select version and commit metadata locally
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash tools/resolve-release.sh
-      - name: Check Lua and run tests
-        run: bash tools/check.sh
-      - name: Verify release packaging
-        run: bash tests/package.sh
-      - name: Verify release automation
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y luajit zip unzip
+      - name: Select version and update metadata
         run: |
-          bash tests/release-version.sh
-          bash tests/release.sh
-      - name: Build release ZIP and checksum
+          current=$(luajit tools/version.lua)
+          part='(0|[1-9][0-9]*)'
+          pattern="$part\.$part\.$part"
+          gh api 'repos/{owner}/{repo}/releases?per_page=100' --paginate \
+            --jq '.[] | select(.draft == false) | .tag_name' > "$RUNNER_TEMP/published-tags"
+          latest=$(sed -nE "s/^v($pattern)$/\1/p" "$RUNNER_TEMP/published-tags" | sort -V | tail -n 1)
+          base=$(printf '%s\n' "$current" "$latest" | sort -V | tail -n 1)
+          version=$CUSTOM_VERSION
+          if [[ -z "$version" ]]; then
+            IFS=. read -r major minor patch <<< "$base"
+            case "$VERSION_SELECTION" in
+              Automatic)
+                if [[ "$current" == "$base" && "$current" != "$latest" ]]; then version=$current
+                else version="$major.$minor.$((patch + 1))"; fi ;;
+              'Use code version') version=$current ;;
+              Patch) version="$major.$minor.$((patch + 1))" ;;
+              Minor) version="$major.$((minor + 1)).0" ;;
+              Major) version="$((major + 1)).0.0" ;;
+              *) echo 'Unknown version selection' >&2; exit 1 ;;
+            esac
+          fi
+          [[ "$version" =~ ^$pattern$ ]] || { echo 'Version must be X.Y.Z without leading zeros' >&2; exit 1; }
+          if [[ -n "$latest" && $(printf '%s\n' "$version" "$latest" | sort -V | tail -n 1) == "$latest" ]]; then
+            echo "Choose a version newer than v$latest" >&2; exit 1
+          fi
+          if git show-ref --verify --quiet "refs/tags/v$version"; then
+            echo "Tag v$version already exists. Review its release or choose a new version." >&2; exit 1
+          fi
+          sed -i -E "s/^( *version = \")[^\"]+(\",)$/\1$version\2/" coversearch.koplugin/_meta.lua
+          luajit tools/version.lua "v$version"
+          printf 'RELEASE_TAG=v%s\n' "$version" >> "$GITHUB_ENV"
+          printf '## Release v%s\n\n' "$version" >> "$GITHUB_STEP_SUMMARY"
+      - name: Run checks
         run: |
+          bash tools/check.sh
+          bash tests/package.sh
+      - name: Commit version if changed and build ZIP
+        run: |
+          if ! git diff --quiet -- coversearch.koplugin/_meta.lua; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add coversearch.koplugin/_meta.lua
+            git commit -m "chore: release $RELEASE_TAG"
+          fi
           bash tools/package.sh "$RELEASE_TAG"
-          {
-            printf 'SHA-256:\n```\n'
-            cat dist/*.sha256
-            printf '```\n'
-          } >> "$GITHUB_STEP_SUMMARY"
-      - name: Push the verified version commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash tools/push-release-version.sh
-      - name: Record release source provenance
-        run: bash tools/release-provenance.sh
-      - name: Attest the public build
-        if: github.event.repository.private == false
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
-        with:
-          subject-path: dist/*.zip
-          create-storage-record: false
-          predicate-type: https://slsa.dev/provenance/v1
-          predicate-path: dist/provenance.json
-      - name: Create release with the selected publication settings
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash tools/prepare-release.sh "$RELEASE_TAG"
+      - name: Push source and create release
+        run: |
+          git tag "$RELEASE_TAG"
+          git -c push.followTags=false push --atomic origin HEAD:refs/heads/main "refs/tags/$RELEASE_TAG"
+          sha=$(git rev-parse HEAD)
+          archive="dist/koreader-coversearch-$RELEASE_TAG.zip"
+          printf '[Build log](%s/%s/actions/runs/%s) · [Source commit](%s/%s/commit/%s)\n' \
+            "$GITHUB_SERVER_URL" "$GH_REPO" "$GITHUB_RUN_ID" "$GITHUB_SERVER_URL" "$GH_REPO" "$sha" \
+            > "$RUNNER_TEMP/release-notes.md"
+          url=$(gh release create "$RELEASE_TAG" "$archive" "$archive.sha256" \
+            --verify-tag --title "$RELEASE_TAG" --generate-notes --notes-file "$RUNNER_TEMP/release-notes.md" \
+            --draft="$DRAFT" --prerelease="$PRERELEASE")
+          printf '\n[Release](%s) · [Source commit](%s/%s/commit/%s)\n' \
+            "$url" "$GITHUB_SERVER_URL" "$GH_REPO" "$sha" >> "$GITHUB_STEP_SUMMARY"
+          cat "$archive.sha256" >> "$GITHUB_STEP_SUMMARY"

@@ -18,11 +18,10 @@ All 59 deterministic Lua checks and LuaJIT syntax validation pass:
 
 `tests/package.sh` verifies exact install-archive contents, extracted file bytes,
 SHA-256 checksums, repeatable builds, and rejection of invalid or mismatched
-release tags. Release checks recorded on 2026-10-09 use temporary Git repositories
-and a fake GitHub CLI. They cover automatic and explicit version selection,
-metadata commits, ZIP/provenance source consistency, same-run retries, concurrent
-edits, drafts, prereleases, immediate publication, existing lightweight/annotated
-tags, published targets, conflicting tags, API errors, and invalid inputs.
+release tags. Local verification of the release workflow used disposable
+repositories with local Git remotes and substituted GitHub CLI responses. It covered version
+selection, metadata commits, ZIP/source consistency, existing tags, concurrent
+changes, and the flags for drafts, prereleases, and immediate publication.
 Both GitHub Actions workflows pass actionlint v1.7.12. GitHub-hosted draft
 preparation and publication have not yet been exercised.
 
