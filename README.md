@@ -20,11 +20,11 @@ If the entry doesn't appear, check that **Cover search** is enabled in KOReader'
 
 ## Choosing a cover
 
-Choose **Cover search → Search covers for this book**. The plugin fills in the title and author from the book's metadata; you can edit either before searching. If it finds a valid ISBN, it also checks **Use ISBN …**. Leave that checked to search using the ISBN, or uncheck it to look for other cover designs by title and author. Sources may still return covers from other editions, and Apple Books always searches by title and author.
+Choose **Cover search → Search covers for this book**. The plugin fills in the title and author from the book's metadata; you can edit either before searching. It also fills in the ISBN when one is available. Check **Use ISBN** to enable the field and search with that number, or type or paste a different ISBN. Leaving the checkbox off searches by title and author; switching it off keeps the ISBN you entered. Sources may still return covers from other editions, and Apple Books always searches by title and author.
 
-If the book contains several different ISBNs, **Choose ISBN** lets you select which one to use. The checkbox shows the current selection; choosing another ISBN keeps your title and author edits. Equivalent 10- and 13-digit numbers count as one choice.
+If the book contains several different ISBNs, **Choose ISBN** lets you select one to fill the field after enabling **Use ISBN**. Choosing another ISBN keeps your title and author edits. Equivalent 10- and 13-digit numbers count as one choice.
 
-Both 10- and 13-digit ISBNs are supported, including identifiers embedded by calibre. If a source finds no cover candidates for the chosen ISBN, the plugin tries its equivalent 10- or 13-digit number once, when one exists. An unavailable or blocked source won't trigger that extra request.
+Both 10- and 13-digit ISBNs are supported, including identifiers embedded by calibre. Spaces and dashes are accepted, and the number is validated before searching. Editing the field doesn't change your ebook's metadata. If a source finds no cover candidates for the chosen ISBN, the plugin tries its equivalent 10- or 13-digit number once, when one exists. An unavailable or blocked source won't trigger that extra request.
 
 Select **Search** to open the cover browser. Results from different sources are mixed together, with **Previous** and **Next** below the thumbnails. Tap a cover for a larger view, then use **Preview** to see it full screen or **Details** to read its source information. When you've found one you like, select **Use this cover**.
 

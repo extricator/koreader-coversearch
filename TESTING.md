@@ -31,7 +31,9 @@ The native suites use actual KOReader widgets, image decoding, cover storage,
 metadata events, and subprocesses in a disposable desktop runtime. Network
 responses are substituted to make UI and storage checks deterministic.
 
-- `tests/runtime.lua` covers plugin initialization, ISBN discovery and opt-out,
+- `tests/runtime.lua` covers plugin initialization, ISBN discovery and opt-in,
+  disabled touch/key input, manual ISBN validation, keyboard-height rebuilds,
+  active-field visibility and key navigation with a visible on-screen keyboard,
   distinct-ISBN selection/cancellation, preserved title and author edits,
   equivalent grouping, long-list focus scrolling, actual submitted queries,
   thumbnail interaction, pagination, previews, cover application/restoration,
@@ -85,10 +87,12 @@ especially Wi-Fi handling, e-ink refresh, and device screen/font settings.
 1. Install the plugin, restart KOReader, and open an ebook. Find Cover search
    directly below Book information in the top menu's hamburger tab.
 2. Verify the title and author remain editable. Check that a discovered ISBN is
-   selected initially and can be disabled. With multiple distinct ISBNs, change
-   the choice and cancel a change; verify edits and checkbox state are preserved.
-   Equivalent ISBN-10/13 forms should count as one choice. Books without a valid
-   ISBN should search by title and author.
+   prefilled beneath the unchecked Use ISBN control, with the field grayed out.
+   Enable it, edit or paste an ISBN, then disable and enable it again; the value
+   should survive. Invalid or empty enabled ISBNs should keep the form open.
+   With multiple distinct ISBNs, select another value and cancel a change; verify
+   all edits are preserved. Equivalent ISBN-10/13 forms should count as one
+   choice. Books without an ISBN should allow manual entry or a title/author search.
 3. Search and check source names and actual pixel dimensions below the thumbnails.
    Open a cover, preview it full screen, and navigate between result pages.
 4. Apply a cover and check KOReader's book-browser thumbnail and configured

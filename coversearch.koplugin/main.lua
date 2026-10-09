@@ -1,7 +1,6 @@
 -- SPDX-License-Identifier: AGPL-3.0-or-later
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Button = require("ui/widget/button")
-local CheckButton = require("ui/widget/checkbutton")
 local DataStorage = require("datastorage")
 local Device = require("device")
 local Dispatcher = require("dispatcher")
@@ -190,27 +189,25 @@ function CoverSearch:onCoverSearch()
     props.isbn = props.isbn or original_props.isbn
     local book = Model.metadata(props, self.ui.document.file)
     local book_file = self.ui.document.file
-    local dialog, isbn_checkbox
-    local selected_isbn = book.isbn
-    local isbn_label = book.isbn ~= "" and string.format(_("Use ISBN %s"), book.isbn) or _("No ISBN available")
+    local dialog
     local choose_label = string.format(_("Choose ISBN · %d found"), #book.isbns)
-    local sizing_label = isbn_label
-    for index, isbn in ipairs(book.isbns) do
-        if #isbn > #book.isbn then sizing_label = string.format(_("Use ISBN %s"), isbn) end
-    end
-    if #book.isbns > 1 then sizing_label = sizing_label .. "\n" .. choose_label end
     dialog = Dialogs.form({
         title = _("Search book covers"),
+        isbn_filter = true,
         fields = {
             { text = book.title, description = _("Title") },
             { text = book.author, description = _("Author (optional)") },
+            { text = book.isbn, hint = _("ISBN-10 or ISBN-13") },
         },
         buttons = {{
             { text = _("Cancel"), id = "close", callback = function() UIManager:close(dialog) end },
             { text = _("Search"), callback = function()
                 local values = dialog:getFields()
-                local query = { title = Model.trim(values[1]), author = Model.trim(values[2]),
-                    isbn = isbn_checkbox.checked and selected_isbn or "" }
+                local query = { title = Model.trim(values[1]), author = Model.trim(values[2]), isbn = "" }
+                if dialog.use_isbn then
+                    query.isbn = Model.isbn(values[3])
+                    if not query.isbn then message(_("Enter a valid ISBN-10 or ISBN-13.")); return end
+                end
                 if query.title == "" and query.isbn == "" then message(_("Enter a title.")); return end
                 local enabled = false
                 for _, source in ipairs(Providers.list) do if self.prefs.enabled[source.id] ~= false then enabled = true end end
@@ -221,35 +218,31 @@ function CoverSearch:onCoverSearch()
                 end)
             end },
         }},
-    }, sizing_label)
-    isbn_checkbox = CheckButton:new{
-        text = isbn_label,
-        checked = book.isbn ~= "", enabled = book.isbn ~= "",
-        parent = dialog, width = math.floor(dialog.width * 0.9),
-    }
-    dialog:addWidget(isbn_checkbox)
+    }, #book.isbns > 1 and choose_label or _("Use ISBN"))
     if #book.isbns > 1 then
         local choose_button = Button:new{
             text = choose_label,
+            enabled = false,
             width = math.floor(dialog.width * 0.9),
             callback = function()
+                if not dialog.use_isbn then return end
                 dialog:onCloseKeyboard()
                 local choices = {}
+                local selected = Model.isbn13(dialog.input_fields[3]:getText())
                 for _, isbn in ipairs(book.isbns) do
-                    choices[#choices + 1] = {{ text = isbn, provider = isbn, checked = isbn == selected_isbn }}
+                    choices[#choices + 1] = {{ text = isbn, provider = isbn, checked = Model.isbn13(isbn) == selected }}
                 end
                 UIManager:show(Dialogs.radio{
                     title_text = _("Choose ISBN"), radio_buttons = choices, width = dialog.width,
                     cancel_text = _("Cancel"), ok_text = _("Use ISBN"),
                     callback = function(picker)
-                        selected_isbn = picker.provider
-                        isbn_checkbox.text = string.format(_("Use ISBN %s"), selected_isbn)
-                        isbn_checkbox:initCheckButton(isbn_checkbox.checked)
+                        dialog.input_fields[3]:setText(picker.provider)
                         UIManager:setDirty(dialog, "ui")
                     end,
                 })
             end,
         }
+        dialog.isbn_chooser = choose_button
         dialog:addWidget(choose_button)
     end
     UIManager:show(dialog)

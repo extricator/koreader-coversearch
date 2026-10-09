@@ -85,25 +85,41 @@ local old_online, old_search, old_props = NetworkMgr.runWhenOnline, plugin.searc
 local submitted
 NetworkMgr.runWhenOnline = function(_, task) task() end
 plugin.search = function(_, _, query) submitted = query end
-local function searchForm(props, disable_isbn)
+local function searchForm(props, use_isbn)
     ui.doc_props = props; submitted = nil
     plugin:onCoverSearch()
     local form = top()
-    assert(#form:getFields() == 2, "ISBN must not require manual input")
-    local checkbox = form._added_widgets[1][1]
+    assert(#form:getFields() == 3, "ISBN must be an editable field")
+    local checkbox = form.isbn_checkbox
+    local isbn_field = form.input_fields[3]
+    assert(not checkbox.checked and checkbox.enabled and isbn_field.readonly and isbn_field._frame.dim)
     UIManager:forceRePaint()
+    local focused = form._input_widget
+    isbn_field:onTapTextBox(nil, { pos = isbn_field.dimen })
+    isbn_field:onHoldTextBox()
+    local saved_isbn = isbn_field:getText()
+    isbn_field:addChars("9")
+    assert(isbn_field:getText() == saved_isbn, "Disabled field must ignore keyboard edits")
+    assert(form._input_widget == focused and top() == form, "Disabled field must consume taps and holds")
+    for _, row in ipairs(form.layout) do assert(row[1] ~= isbn_field, "Disabled field must skip key focus") end
     if arg[4] == "es" then
         assert(form.title == "Buscar portadas" and form.fields[1].description == "Título")
         assert(form.fields[2].description == "Autor (opcional)")
         local frame = form.dialog_frame:getSize()
         assert(frame.w <= Device.screen:getWidth() and frame.h <= Device.screen:getHeight())
     end
-    if disable_isbn then checkbox:onTapCheckButton() end
+    if use_isbn then
+        form.selected = { x = 2, y = #form.layout }
+        local focused_button = form:getFocusItem()
+        checkbox:onTapCheckButton()
+        assert(not isbn_field.readonly and not isbn_field._frame.dim and form.layout[4][1] == isbn_field)
+        assert(form:getFocusItem() == focused_button, "Changing field focus rows must preserve button focus")
+    end
     button(form, "Search").callback()
     assert(submitted)
     return checkbox
 end
-local checkbox = searchForm({ title = "Dune", authors = "Frank Herbert", identifiers = "urn:isbn:9780441172719" })
+local checkbox = searchForm({ title = "Dune", authors = "Frank Herbert", identifiers = "urn:isbn:9780441172719" }, true)
 assert(checkbox.checked and submitted.isbn == "9780441172719")
 -- ReaderUI saves raw properties, then uses BookInfo's customized copy without identifiers.
 local BookInfo = require("apps/filemanager/filemanagerbookinfo")
@@ -113,31 +129,61 @@ local customized_props = BookInfo.extendProps(original_props)
 assert(customized_props.identifiers == nil)
 customized_props.title, customized_props.authors = "Edited title", "Edited author"
 ui.doc_settings:saveSetting("doc_props", original_props)
-checkbox = searchForm(customized_props)
+checkbox = searchForm(customized_props, true)
 assert(checkbox.checked and submitted.isbn == "9780876127773")
 assert(submitted.title == "Edited title" and submitted.author == "Edited author")
 assert(customized_props.identifiers == nil, "Discovery must not mutate ReaderUI's properties")
 ui.doc_settings:delSetting("doc_props")
 print("PASS ISBN discovery through ReaderUI's customized metadata while preserving title/author")
-checkbox = searchForm({ title = "Dune", authors = "Frank Herbert", isbn = "0441172717" }, true)
+checkbox = searchForm({ title = "Dune", authors = "Frank Herbert", isbn = "0441172717" })
 assert(not checkbox.checked and submitted.isbn == "" and submitted.title == "Dune")
-checkbox = searchForm({ title = "Dune", authors = "Frank Herbert" }, true)
-assert(not checkbox.enabled and not checkbox.checked and submitted.isbn == "")
+checkbox = searchForm({ title = "Dune", authors = "Frank Herbert" })
+assert(checkbox.enabled and not checkbox.checked and submitted.isbn == "")
 checkbox = searchForm({ title = "Dune", authors = "Frank Herbert", isbn = "9780441172718" })
-assert(not checkbox.enabled and submitted.isbn == "")
-checkbox = searchForm({ title = "Dune", authors = "Frank Herbert", isbn = "ISBN–13: 978–0–441–17271–9" })
+assert(checkbox.enabled and submitted.isbn == "")
+checkbox = searchForm({ title = "Dune", authors = "Frank Herbert", isbn = "ISBN–13: 978–0–441–17271–9" }, true)
 assert(checkbox.checked and submitted.isbn == "9780441172719")
 checkbox = searchForm({ title = "Dune", authors = "Frank Herbert",
-    identifiers = { asin = "080442957X", isbn = "9780441172719" } })
+    identifiers = { asin = "080442957X", isbn = "9780441172719" } }, true)
 assert(checkbox.checked and submitted.isbn == "9780441172719")
+-- A book with no identifier supports manual ISBN-only searches and rejects bad input.
+ui.doc_props = { title = "", authors = "" }; submitted = nil
+plugin:onCoverSearch()
+local manual_form = top()
+manual_form.input_fields[1]:setText("")
+assert(manual_form.input_fields[3]:getText() == "")
+UIManager:forceRePaint()
+manual_form.isbn_checkbox:onTapCheckButton()
+for _, invalid in ipairs({ "", "9780441172718", "ASIN:0441172717" }) do
+    manual_form.input_fields[3]:setText(invalid)
+    button(manual_form, "Search").callback()
+    assert(not submitted and top().text == translate("Enter a valid ISBN-10 or ISBN-13."))
+    UIManager:close(top())
+    assert(top() == manual_form, "Invalid input must preserve the form")
+end
+manual_form.input_fields[3]:setText("ISBN–10: 0–8044–2957–x")
+UIManager:forceRePaint()
+manual_form.isbn_checkbox:onTapCheckButton()
+assert(manual_form.input_fields[3]:getText() == "ISBN–10: 0–8044–2957–x")
+UIManager:forceRePaint()
+manual_form.isbn_checkbox:onTapCheckButton()
+button(manual_form, "Search").callback()
+assert(submitted.isbn == "080442957X" and submitted.title == "")
+print("PASS manual ISBN input, validation, normalization, preserved opt-out value, and ISBN-only search")
 -- A chooser changes only the selected ISBN; title, author, and opt-out survive.
 ui.doc_props = { title = "Dune", authors = "Frank Herbert", isbn = "0441172717",
     identifiers = "isbn:9780441172719\nisbn:9780441013593" }
 plugin:onCoverSearch()
 local form = top()
-assert(#form._added_widgets == 2)
-local isbn_box, choose = form._added_widgets[1][1], form._added_widgets[2][1]
+assert(#form._added_widgets == 1)
+local isbn_box, choose = form.isbn_checkbox, form.isbn_chooser
 assert(choose.text == string.format(translate("Choose ISBN · %d found"), 2))
+assert(not choose.enabled and form.input_fields[3]:getText() == "0441172717")
+choose.callback()
+assert(top() == form, "Disabled chooser must not open")
+form:onCloseKeyboard()
+UIManager:forceRePaint()
+Device.screen:shot("/tmp/coversearch-isbn-disabled" .. (arg[4] == "es" and "-es" or "") .. ".png")
 form.input_fields[1]:setText("Edited title")
 form.input_fields[2]:setText("Edited author")
 UIManager:forceRePaint()
@@ -148,17 +194,53 @@ UIManager:forceRePaint()
 local radio = isbn_picker.widget_frame[1][2][1][1]
 radio.radio_buttons_layout[2][1]:onTapCheckButton()
 isbn_picker.layout[#isbn_picker.layout][1].callback()
-assert(isbn_box.text == string.format(translate("Use ISBN %s"), "0441172717"), "Cancel must retain the choice")
+assert(form.input_fields[3]:getText() == "0441172717", "Cancel must retain the input")
 choose.callback()
 isbn_picker = top()
 UIManager:forceRePaint()
 radio = isbn_picker.widget_frame[1][2][1][1]
 radio.radio_buttons_layout[2][1]:onTapCheckButton()
 isbn_picker.layout[#isbn_picker.layout][2].callback()
-assert(isbn_box.text == string.format(translate("Use ISBN %s"), "9780441013593"))
-assert(not isbn_box.checked, "Selecting an ISBN must preserve opt-out")
+assert(form.input_fields[3]:getText() == "9780441013593" and isbn_box.checked)
+-- Rebuilding after a keyboard-height change must preserve every field and the toggle.
+G_reader_settings:saveSetting("virtual_keyboard_enabled", true)
+form.skip_first_show_keyboard = nil
+form:onSwitchFocus(form.input_fields[3])
 UIManager:forceRePaint()
-isbn_box:onTapCheckButton()
+assert(form:isKeyboardVisible(), "Exercise a visible native keyboard")
+local isbn_field, keyboard = form.input_fields[3], form._input_widget.keyboard
+assert(isbn_field.dimen.y >= 0 and isbn_field.dimen.y + isbn_field.dimen.h <= keyboard.dimen.y,
+    "The active ISBN field must fit above the keyboard")
+if arg[3] == "landscape" then
+    assert(form.cropping_widget, "Short viewports must scroll")
+    form.selected = { x = 1, y = 4 }
+    for index = 1, 2 do
+        form:onFocusMove({ 0, 1 })
+        UIManager:forceRePaint()
+        local control = form:getFocusItem()
+        assert(control.dimen.y >= 0 and control.dimen.y + control.dimen.h <= keyboard.dimen.y,
+            "Key navigation must scroll the chooser and buttons above the keyboard")
+    end
+    form:onSwitchFocus(form.input_fields[3])
+    UIManager:forceRePaint()
+end
+Device.screen:shot("/tmp/coversearch-isbn-editing" .. (arg[3] == "landscape" and "-landscape" or "") .. ".png")
+form:onKeyboardHeightChanged()
+UIManager:forceRePaint()
+assert(form.input_fields[3].dimen.y + form.input_fields[3].dimen.h <= form._input_widget.keyboard.dimen.y)
+assert(form:getFields()[1] == "Edited title" and form:getFields()[2] == "Edited author")
+assert(form:getFields()[3] == "9780441013593" and form.isbn_checkbox.checked and choose.enabled)
+UIManager:forceRePaint()
+form.selected = { x = 1, y = 4 }
+form.isbn_checkbox:onTapCheckButton()
+assert(not form.use_isbn and form.input_fields[3].readonly and not choose.enabled)
+assert(form:getFocusItem() == form.isbn_checkbox, "Disabling a focused ISBN must retain usable key focus")
+assert(not form:isKeyboardVisible() and form.focused_field_idx ~= 3)
+G_reader_settings:delSetting("virtual_keyboard_enabled")
+form:onKeyboardHeightChanged()
+assert(not form.isbn_checkbox.checked and form:getFields()[3] == "9780441013593")
+UIManager:forceRePaint()
+form.isbn_checkbox:onTapCheckButton()
 UIManager:forceRePaint()
 Device.screen:shot("/tmp/coversearch-isbn-search" .. (arg[4] == "es" and "-es" or "") .. ".png")
 choose.callback()
@@ -171,9 +253,9 @@ button(form, "Search").callback()
 assert(submitted.title == "Edited title" and submitted.author == "Edited author" and submitted.isbn == "9780441013593")
 ui.doc_props = { isbn = "0441172717", identifiers = "isbn:9780441172719" }
 plugin:onCoverSearch()
-assert(#top()._added_widgets == 1, "Equivalent ISBNs should not show a chooser")
+assert(not top().isbn_chooser, "Equivalent ISBNs should not show a chooser")
 button(top(), "Cancel").callback()
-print("PASS native multiple-ISBN selection, cancel, opt-out, preserved text edits, and equivalent grouping")
+print("PASS native ISBN picker, keyboard rebuilds, disabled controls, preserved edits, and equivalent grouping")
 local choices = {}
 for index = 1, 24 do
     choices[index] = {{ text = "9780441172719", provider = tostring(index), checked = index == 1 }}
@@ -192,7 +274,7 @@ assert(large_picker.cropping_widget._scroll_offset_y > 0, "Key focus must scroll
 large_picker:onClose()
 print("PASS bounded long ISBN chooser and keyboard focus scrolling")
 NetworkMgr.runWhenOnline, plugin.search, ui.doc_props = old_online, old_search, old_props
-print("PASS automatic ISBN filter, native checkbox opt-out, missing/invalid ISBN fallback, and submitted queries")
+print("PASS ISBN prefill, explicit opt-in, disabled touch/key input, and submitted queries")
 plugin.session = session
 for index = 3, 6 do
     session.candidates[index] = { source = "Test source " .. index, title = "Test cover " .. index,

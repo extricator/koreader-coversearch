@@ -25,7 +25,7 @@ test("Spanish UI setting and regional locale fallback", function()
     for language_index, language in ipairs({ "es", "es_ES", "es_MX.UTF-8", "es-DO", "ES" }) do
         settings.language = language
         assert(_("Cover search") == "Buscar portadas" and _("Close") == "Cerrar")
-        assert(string.format(_("Use ISBN %s"), "9780441172719") == "Usar ISBN 9780441172719")
+        assert(_("Use ISBN") == "Usar ISBN" and _("ISBN-10 or ISBN-13") == "ISBN-10 o ISBN-13")
     end
 end)
 test("Missing UI preference uses KOReader's active language", function()

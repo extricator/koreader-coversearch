@@ -3,6 +3,7 @@
 local Blitbuffer = require("ffi/blitbuffer")
 local ButtonDialog = require("ui/widget/buttondialog")
 local CenterContainer = require("ui/widget/container/centercontainer")
+local CheckButton = require("ui/widget/checkbutton")
 local Font = require("ui/font")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local IconWidget = require("ui/widget/iconwidget")
@@ -54,6 +55,115 @@ function Dialogs.info(text)
         width = math.min(textWidth(text, face, limit) + IconWidget.width, limit) }
 end
 
+-- Keep the toggle inside the field layout so keyboard-height changes rebuild it safely.
+local ISBNForm = MultiInputDialog:extend{ use_isbn = false }
+
+function ISBNForm:updateISBNFilter()
+    local field = self.input_fields[3]
+    local focused = self:getFocusItem()
+    if not self.use_isbn and self._input_widget == field then
+        self:onCloseKeyboard()
+        field:unfocus()
+        self._input_widget = self.input_fields[2]
+        self.focused_field_idx = 2
+        self._input_widget:focus()
+    end
+    if not self.use_isbn and focused == field then focused = self.isbn_checkbox end
+    field.readonly = not self.use_isbn
+    field._frame.dim = not self.use_isbn
+    for index, row in ipairs(self.layout) do
+        if row[1] == field then table.remove(self.layout, index); break end
+    end
+    if self.use_isbn then table.insert(self.layout, 4, { field }) end
+    for index, row in ipairs(self.layout) do
+        for column, widget in ipairs(row) do
+            if widget == focused then self.selected.x, self.selected.y = column, index end
+        end
+    end
+    if self.isbn_chooser then self.isbn_chooser:enableDisable(self.use_isbn) end
+    UIManager:setDirty(self, "ui")
+end
+
+function ISBNForm:init()
+    if self.cropping_widget then self.cropping_widget:reset() end
+    self.cropping_widget, self._viewport_height, self._scroll_target = nil, nil, nil
+    MultiInputDialog.init(self)
+    local field = self.input_fields[3]
+    -- Read-only InputText still supports selection menus; consume disabled taps and holds.
+    for _, event in ipairs({ "onTapTextBox", "onHoldTextBox", "holdTextBox", "onFocus" }) do
+        local handler = field[event]
+        field[event] = function(widget, ...)
+            if not self.use_isbn then return true end
+            if handler then return handler(widget, ...) end
+        end
+    end
+    self.isbn_checkbox = CheckButton:new{
+        text = _("Use ISBN"), checked = self.use_isbn, parent = self,
+        width = math.floor(self.width * 0.9),
+        callback = function()
+            self.use_isbn = self.isbn_checkbox.checked
+            self._scroll_target = self.isbn_checkbox
+            self:updateISBNFilter()
+        end,
+    }
+    local group = self.dialog_frame[1]
+    for index, container in ipairs(group) do
+        if container[1] == field then
+            table.insert(group, index, CenterContainer:new{
+                dimen = Geom:new{ w = self.width, h = self.isbn_checkbox:getSize().h }, self.isbn_checkbox,
+            })
+            break
+        end
+    end
+    table.insert(self.layout, 3, { self.isbn_checkbox })
+    group:resetLayout()
+    self:updateISBNFilter()
+end
+
+function ISBNForm:onSwitchFocus(field)
+    if field == self.input_fields[3] and not self.use_isbn then return end
+    self._scroll_target = field
+    return MultiInputDialog.onSwitchFocus(self, field)
+end
+
+function ISBNForm:onFocusMove(args)
+    local result = FocusManager.onFocusMove(self, args)
+    self._scroll_target = self:getFocusItem()
+    return result
+end
+
+function ISBNForm:paintTo(bb, x, y)
+    local available = Screen:getHeight() - (self:isKeyboardVisible() and self._input_widget:getKeyboardDimen().h or 0)
+    local size = self.dialog_frame:getSize()
+    local changed = self._viewport_height ~= available or self._content_height ~= size.h
+    if changed then
+        if self.cropping_widget then self.cropping_widget:reset() end
+        self.cropping_widget = nil
+        local content = self.dialog_frame
+        if size.h > available then
+            content = ScrollableContainer:new{
+                dimen = Geom:new{ w = size.w + ScrollableContainer:getScrollbarWidth(), h = available },
+                show_parent = self, self.dialog_frame,
+            }
+            self.cropping_widget = content
+        end
+        self[1] = CenterContainer:new{ dimen = Geom:new{ w = Screen:getWidth(), h = available }, content }
+        self._viewport_height, self._content_height = available, size.h
+    end
+    MultiInputDialog.paintTo(self, bb, x, y)
+    local scroll, target = self.cropping_widget, self._scroll_target or self._input_widget
+    if scroll and target.dimen and self.dialog_frame.dimen and (changed or target ~= self._scrolled_target) then
+        local offset = target.dimen.y - self.dialog_frame.dimen.y
+        local current = scroll._scroll_offset_y
+        if offset < current then scroll:_scrollBy(0, offset - current)
+        elseif offset + target.dimen.h > current + available then
+            scroll:_scrollBy(0, offset + target.dimen.h - current - available)
+        end
+        if current ~= scroll._scroll_offset_y then MultiInputDialog.paintTo(self, bb, x, y) end
+    end
+    self._scrolled_target = target
+end
+
 function Dialogs.form(options, extra_text)
     local limit = math.floor(Screen:getWidth() * 0.9)
     local field_face = Font:getFace("x_smallinfofont")
@@ -67,7 +177,7 @@ function Dialogs.form(options, extra_text)
         width = math.max(width, (textWidth(extra_text, Font:getFace("smallinfofont"), limit) + Screen:scaleBySize(36)) / 0.9)
     end
     options.width = math.floor(math.min(width, limit))
-    return MultiInputDialog:new(options)
+    return (options.isbn_filter and ISBNForm or MultiInputDialog):new(options)
 end
 
 function Dialogs.buttons(options, content_width)
